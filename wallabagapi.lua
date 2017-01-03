@@ -1,4 +1,3 @@
-local InputContainer = require("ui/widget/container/inputcontainer")
 local json = require("json")
 local http = require("socket.http")
 local https = require("ssl.https")
@@ -55,7 +54,7 @@ function WallabagApi:buildRequest(req_method, req_url, token, req_body)
         source = ltn12.source.string(req_body),
         sink = ltn12.sink.table(resp_body)
     }
-    if c ~= 200 then print("There was an error send the request to the server") end
+    if c ~= 200 then print("There was an error sending the request to the server") end
     return(table.concat(resp_body))
 end
 

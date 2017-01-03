@@ -397,7 +397,7 @@ function Wallabag:sync()
                 local newStatus = {}
                 if article_summary.status == "abandoned" then
                     WallabagApi:deleteEntry(walla_url, token, article_id)
-                    print("TO REMOVE: "..article_filename.."\n"..sdrDir.."\n\n")
+                    print("TO REMOVE: "..article_filename.."\n")
                 else
                     if article_summary.rating == 5 then
                         newStatus["starred"]="1"
