@@ -1,8 +1,9 @@
--- make local sync date the end of the day
 -- hash image names
--- load database only once to speed things up
+-- speed improvements?
+-- remove unnecessary calls to get settings/db/token
 -- deal with wifi disconnected
 -- deal with images that should be deleted
+-- tighten up error checking
 local InputContainer = require("ui/widget/container/inputcontainer")
 local DocSettings = require("docsettings")
 local FileManager = require("apps/filemanager/filemanager")
@@ -306,13 +307,7 @@ function Wallabag:buildLocalDB(remoteDB)
         end
 		print("filename: "..article_filename)
 
-        local infoMsg = InfoMessage:new{text = _("Fetching:    "..index.." of "..num_articles.." articles.")}
-        UIManager:show(infoMsg)
-        UIManager:forceRePaint()
-
-		article_content = Wallabag:downloadImages(article_content, article_id)
-
-        UIManager:close(infoMsg)
+		article_content = Wallabag:downloadImages(article_content, article_id, index, num_articles)
 
 		local contentFile = io.open(article_filename, "w")
 		contentFile:write("<h1 style=\"text-align:center;\">"..article_title.."</h1>\n"..
@@ -368,6 +363,10 @@ function Wallabag:sync()
 
     local localDB = Wallabag:getDB("local")
 
+    syncInfoMsg = InfoMessage:new{text = _("Syncing...")}
+    UIManager:show(syncInfoMsg)
+    UIManager:forceRePaint()
+
     for index, local_article in pairs(localDB) do
         local article_id = index
         local article_filename = local_article.filename
@@ -419,16 +418,18 @@ function Wallabag:sync()
     local remoteDB = Wallabag:getDB("remote")
     Wallabag:createDBDir()
     Wallabag:buildLocalDB(remoteDB)
+    if syncInfoMsg then UIManager:close(syncInfoMsg) end
     FileManager:showFiles(walla_dir)
 end
 
-function Wallabag:downloadImages(articleContent, articleId)
+function Wallabag:downloadImages(articleContent, articleId, index, num_articles)
 	local images = {}
 	local counter = 0
 	local prevIndexEnd = 1
 	local newArticleContent = ""
 	local imageFilename = ""
 	local imageIndices = articleContent:gmatch("<img.-src=\"().-()\"")
+
 	for indexStart, indexEnd in imageIndices do
 		lfs.mkdir(walla_image_dir..articleId)
 		counter = counter + 1
@@ -443,14 +444,25 @@ function Wallabag:downloadImages(articleContent, articleId)
 		newArticleContent = newArticleContent..walla_image_dir..imageFilename
 		prevIndexEnd = indexEnd
 		if imageFilename ~= "" and not lfs.attributes(walla_image_dir..imageFilename) then
-            Wallabag:downloadFile(imageLink, walla_image_dir..imageFilename)
+            if syncInfoMsg then
+                for i,v in pairs(syncInfoMsg) do print(i,v) end
+                UIManager:close(syncInfoMsg)
+                syncInfoMsg = nil
+            end
+            local dlInfoMsg = InfoMessage:new{text = _("Downloading images:\n Article "..index.." of "..num_articles..".")}
+            UIManager:show(dlInfoMsg)
+            UIManager:forceRePaint()
+
+            Wallabag:downloadFile(imageLink, walla_image_dir..imageFilename, index, num_articles)
+
+            UIManager:close(dlInfoMsg)
         end
 	end
 	newArticleContent = newArticleContent..articleContent:sub(prevIndexEnd)
 	return newArticleContent
 end
 
-function Wallabag:downloadFile(url, filename)
+function Wallabag:downloadFile(url, filename, index, num_articles)
     print("url: "..url)
     content, status, header = https.request(url)
     if not content then content, status, header = http.request(url) end
@@ -460,6 +472,7 @@ function Wallabag:downloadFile(url, filename)
         imageFile:write(content)
         imageFile:close()
     end
+
 end
 
 return Wallabag
