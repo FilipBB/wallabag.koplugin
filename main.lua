@@ -1,9 +1,3 @@
--- hash image names
--- speed improvements?
--- remove unnecessary calls to get settings/db/token
--- deal with wifi disconnected
--- deal with images that should be deleted
--- tighten up error checking
 local InputContainer = require("ui/widget/container/inputcontainer")
 local DocSettings = require("docsettings")
 local FileManager = require("apps/filemanager/filemanager")
@@ -453,7 +447,7 @@ function Wallabag:downloadImages(articleContent, articleId, index, num_articles)
             UIManager:show(dlInfoMsg)
             UIManager:forceRePaint()
 
-            Wallabag:downloadFile(imageLink, walla_image_dir..imageFilename, index, num_articles)
+            Wallabag:downloadFile(imageLink, walla_image_dir..imageFilename)
 
             UIManager:close(dlInfoMsg)
         end
@@ -462,7 +456,7 @@ function Wallabag:downloadImages(articleContent, articleId, index, num_articles)
 	return newArticleContent
 end
 
-function Wallabag:downloadFile(url, filename, index, num_articles)
+function Wallabag:downloadFile(url, filename)
     print("url: "..url)
     content, status, header = https.request(url)
     if not content then content, status, header = http.request(url) end
