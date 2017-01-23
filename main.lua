@@ -509,7 +509,8 @@ function Wallabag:downloadFile(url, index, num_articles)
             return imageFilename
         end
     else
-        return md5.sum("blank")
+        os.execute("cp -v "..DataStorage:getDataDir().."/plugins/wallabag.koplugin/".."blank.jpg "..walla_image_dir..imageFilename..".jpg")
+        return imageFilename..".jpg"
     end
 end
 
