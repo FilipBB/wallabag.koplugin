@@ -9,6 +9,7 @@ local UIManager = require("ui/uimanager")
 local InfoMessage = require("ui/widget/infomessage")
 local MultiInputDialog = require("ui/widget/multiinputdialog")
 local WallabagApi = require("wallabagapi")
+local md5 = require("ffi/MD5")
 local dump = require("dump")
 local lfs = require("libs/libkoreader-lfs")
 local json = require("json")
@@ -37,9 +38,19 @@ function Wallabag:init()
         self.fetch_amount = walla_sett.wallabag.amount
     end
 	walla_dir = DataStorage:getDataDir().."/plugins/wallabag.koplugin/wallabag/"
-	walla_image_dir = DataStorage:getDataDir().."/plugins/wallabag.koplugin/images/"
+	walla_image_dir = DataStorage:getDataDir().."/plugins/wallabag.koplugin/.images/"
     Wallabag:createDBDir()
     self.ui.menu:registerToMainMenu(self)
+end
+
+function Wallabag:buildImageCache()
+    imageCache = {}
+    for file in lfs.dir(walla_image_dir) do
+        if lfs.attributes(walla_image_dir..file, "mode") == "file" then
+            table.insert(imageCache, file)
+        end
+    end
+    return imageCache
 end
 
 function Wallabag:createDBDir()
@@ -285,7 +296,6 @@ function Wallabag:buildLocalDB(remoteDB)
 		article_title = article_title:gsub("%s$", "")
 
         local remote_status = {}
-        print("remote_stats: ".."starred "..remote_article.is_starred.." archived "..remote_article.is_archived)
         if remote_article.is_starred == 1 and remote_article.is_archived == 1 then
             remote_status["rating"] = 5
             remote_status["status"] = "complete"
@@ -299,7 +309,7 @@ function Wallabag:buildLocalDB(remoteDB)
             remote_status["status"] = "reading"
             article_filename = walla_dir..article_id.."-"..article_title..".html"
         end
-		print("filename: "..article_filename)
+		-- print("filename: "..article_filename)
 
 		article_content = Wallabag:downloadImages(article_content, article_id, index, num_articles)
 
@@ -357,6 +367,9 @@ function Wallabag:sync()
 
     local localDB = Wallabag:getDB("local")
 
+    walla_image_matched = {}
+    walla_image_cache = Wallabag:buildImageCache()
+
     syncInfoMsg = InfoMessage:new{text = _("Syncing...")}
     UIManager:show(syncInfoMsg)
     UIManager:forceRePaint()
@@ -364,7 +377,6 @@ function Wallabag:sync()
     for index, local_article in pairs(localDB) do
         local article_id = index
         local article_filename = local_article.filename
-        print("article_filename: "..local_article.filename)
 
         article_settings = DocSettings:open(article_filename)
         article_summary = article_settings:readSetting("summary")
@@ -413,6 +425,11 @@ function Wallabag:sync()
     Wallabag:createDBDir()
     Wallabag:buildLocalDB(remoteDB)
     if syncInfoMsg then UIManager:close(syncInfoMsg) end
+    for i,filename in pairs(walla_image_cache) do
+        print("removing: "..i,filename)
+        os.execute('rm -vf "'..walla_image_dir..filename..'"')
+    end
+    os.execute("cp -v "..DataStorage:getDataDir().."/plugins/wallabag.koplugin/".."blank.jpg "..walla_image_dir..md5.sum("blank")..".jpg")
     FileManager:showFiles(walla_dir)
 end
 
@@ -425,48 +442,75 @@ function Wallabag:downloadImages(articleContent, articleId, index, num_articles)
 	local imageIndices = articleContent:gmatch("<img.-src=\"().-()\"")
 
 	for indexStart, indexEnd in imageIndices do
-		lfs.mkdir(walla_image_dir..articleId)
 		counter = counter + 1
 		imageLink = articleContent:sub(indexStart, indexEnd-1)
 		newArticleContent = newArticleContent..articleContent:sub(prevIndexEnd, indexStart-1)
-		if imageLink:match("jpeg") then imageFilename = articleId.."/"..counter..".jpeg"
-			elseif imageLink:match("jpg") then imageFilename = articleId.."/"..counter..".jpg"
-			elseif imageLink:match("gif") then imageFilename = articleId.."/"..counter..".gif"
-			elseif imageLink:match("png") then imageFilename = articleId.."/"..counter..".png"
-            else imageFilename = ""
-		end
+        imageFilename = Wallabag:downloadFile(imageLink, index, num_articles)
 		newArticleContent = newArticleContent..walla_image_dir..imageFilename
 		prevIndexEnd = indexEnd
-		if imageFilename ~= "" and not lfs.attributes(walla_image_dir..imageFilename) then
+	end
+	newArticleContent = newArticleContent..articleContent:sub(prevIndexEnd)
+	return newArticleContent
+end
+
+function Wallabag:downloadFile(url, index, num_articles)
+    -- print("url: "..url)
+    local imageFilename = md5.sum(url)
+    for key, filename in pairs(walla_image_cache) do
+        if filename:match(imageFilename) then
+            table.insert(walla_image_matched, filename)
+            table.remove(walla_image_cache, key)
+            print("matched "..filename)
+            return filename
+        end
+    end
+    for key, filename in pairs(walla_image_matched) do
+        if filename:match(imageFilename) then
+            print("matched "..filename)
+            return filename
+        end
+    end
+    if url:match("^https.*") then
+        content, status, header = https.request(url)
+    else
+        content, status, header = http.request(url)
+    end
+    if status == 200 then
+        if header["content-type"] then
+            if header["content-type"]:match("image/(.*);.*$") then
+                imageExt = header["content-type"]:match("image/(.*);.*$")
+            elseif header["content-type"]:match("image/(.*)$") then
+                imageExt = header["content-type"]:match("image/(.*)$")
+            else
+                print(header["content-type"])
+                imageExt = "unknown"
+            end
+
+            imageFilename = imageFilename.."."..imageExt
+
             if syncInfoMsg then
-                for i,v in pairs(syncInfoMsg) do print(i,v) end
                 UIManager:close(syncInfoMsg)
                 syncInfoMsg = nil
             end
             local dlInfoMsg = InfoMessage:new{text = _("Downloading images:\n Article "..index.." of "..num_articles..".")}
             UIManager:show(dlInfoMsg)
             UIManager:forceRePaint()
-
-            Wallabag:downloadFile(imageLink, walla_image_dir..imageFilename)
-
             UIManager:close(dlInfoMsg)
+
+            if lfs.attributes(walla_image_dir..imageFilename) then
+                print("Exists "..lfs.attributes(walla_image_dir..imageFilename, "mode").." "..imageFilename.." "..url)
+            end
+
+            local imageFile = io.open(walla_image_dir..imageFilename, "w")
+            imageFile:write(content)
+            imageFile:close()
+            table.insert(walla_image_matched, imageFilename)
+            return imageFilename
         end
-	end
-	newArticleContent = newArticleContent..articleContent:sub(prevIndexEnd)
-	return newArticleContent
-end
-
-function Wallabag:downloadFile(url, filename)
-    print("url: "..url)
-    content, status, header = https.request(url)
-    if not content then content, status, header = http.request(url) end
-    if content then
-        print("status: "..status)
-        local imageFile = io.open(filename, "w")
-        imageFile:write(content)
-        imageFile:close()
+    else
+        -- print("ERROR! status: "..status)
+        return md5.sum("blank")
     end
-
 end
 
 return Wallabag

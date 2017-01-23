@@ -1,6 +1,6 @@
-hash image names
 speed improvements?
 remove unnecessary calls to get settings/db/token
 deal with wifi disconnected
-deal with images that should be deleted
 tighten up error checking
+make image download optional
+readme file
