@@ -9,6 +9,7 @@ local UIManager = require("ui/uimanager")
 local InfoMessage = require("ui/widget/infomessage")
 local MultiInputDialog = require("ui/widget/multiinputdialog")
 local WallabagApi = require("wallabagapi")
+local NetworkMgr = require("ui/network/manager")
 local md5 = require("ffi/MD5")
 local dump = require("dump")
 local lfs = require("libs/libkoreader-lfs")
@@ -72,7 +73,11 @@ function Wallabag:addToMainMenu(tab_item_table)
                 text = _("Sync"),
                 callback = function()
                     if self.client_id ~= "" then
-                        self.sync()
+                        if NetworkMgr:isOnline() then
+                            self.sync()
+                        else
+                            NetworkMgr:promptWifiOn()
+                        end
                     else
                         UIManager:show(InfoMessage:new{
                             text = _("Please set up your Wallabag \"Client ID\" and login info first"),
@@ -446,7 +451,7 @@ function Wallabag:downloadImages(articleContent, articleId, index, num_articles)
 		imageLink = articleContent:sub(indexStart, indexEnd-1)
 		newArticleContent = newArticleContent..articleContent:sub(prevIndexEnd, indexStart-1)
         imageFilename = Wallabag:downloadFile(imageLink, index, num_articles)
-		newArticleContent = newArticleContent..walla_image_dir..imageFilename
+		newArticleContent = newArticleContent.."../.images/"..imageFilename
 		prevIndexEnd = indexEnd
 	end
 	newArticleContent = newArticleContent..articleContent:sub(prevIndexEnd)
@@ -497,10 +502,6 @@ function Wallabag:downloadFile(url, index, num_articles)
             UIManager:forceRePaint()
             UIManager:close(dlInfoMsg)
 
-            if lfs.attributes(walla_image_dir..imageFilename) then
-                print("Exists "..lfs.attributes(walla_image_dir..imageFilename, "mode").." "..imageFilename.." "..url)
-            end
-
             local imageFile = io.open(walla_image_dir..imageFilename, "w")
             imageFile:write(content)
             imageFile:close()
@@ -508,7 +509,6 @@ function Wallabag:downloadFile(url, index, num_articles)
             return imageFilename
         end
     else
-        -- print("ERROR! status: "..status)
         return md5.sum("blank")
     end
 end
