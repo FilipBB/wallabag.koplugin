@@ -288,10 +288,17 @@ function Wallabag:buildLocalDB(remoteDB)
     local localDB = {}
 
 	local num_articles = util.tableSize(remoteDB._embedded.items)
+
+    -- pad article filename indexes so sorting in the file manager is sensible
+    local highest_id = remoteDB._embedded.items[1].id
+    local padding_width = string.len(highest_id)
+    local padding_format = "%0"..padding_width.."u"
+
 	for index, remote_article in pairs(remoteDB._embedded.items) do
 
         local article_url = remote_article.url
         local article_id = remote_article.id
+        local article_file_id = string.format(padding_format, remote_article.id)
         local article_content = remote_article.content
         local article_title = remote_article.title
 
@@ -304,19 +311,19 @@ function Wallabag:buildLocalDB(remoteDB)
         if remote_article.is_starred == 1 and remote_article.is_archived == 1 then
             remote_status["rating"] = 5
             remote_status["status"] = "complete"
-            article_filename = walla_dir.."favorites/"..article_id.."-"..article_title..".html"
+            article_filename = walla_dir.."favorites/"..article_file_id.."-"..article_title..".html"
         elseif remote_article.is_starred == 0 and remote_article.is_archived == 1 then
             remote_status["rating"] = 0
             remote_status["status"] = "complete"
-            article_filename = walla_dir.."archived/"..article_id.."-"..article_title..".html"
+            article_filename = walla_dir.."archived/"..article_file_id.."-"..article_title..".html"
         else
             remote_status["rating"] = 0
             remote_status["status"] = "reading"
-            article_filename = walla_dir..article_id.."-"..article_title..".html"
+            article_filename = walla_dir..article_file_id.."-"..article_title..".html"
         end
 		print("filename: "..article_filename)
 
-		article_content = Wallabag:downloadImages(article_content, article_id, index, num_articles)
+		article_content = Wallabag:downloadImages(article_content, index, num_articles)
 
 		local contentFile = io.open(article_filename, "w")
 		contentFile:write("<h1 style=\"text-align:center;\">"..article_title.."</h1>\n"..
@@ -438,7 +445,7 @@ function Wallabag:sync()
     FileManager:showFiles(walla_dir)
 end
 
-function Wallabag:downloadImages(articleContent, articleId, index, num_articles)
+function Wallabag:downloadImages(articleContent, index, num_articles)
 	local images = {}
 	local counter = 0
 	local prevIndexEnd = 1
@@ -450,7 +457,6 @@ function Wallabag:downloadImages(articleContent, articleId, index, num_articles)
 		counter = counter + 1
 		imageLink = articleContent:sub(indexStart, indexEnd-1)
 		newArticleContent = newArticleContent..articleContent:sub(prevIndexEnd, indexStart-1)
-        print("imagelink: "..imageLink.." "..articleId)
         imageFilename = Wallabag:downloadFile(imageLink, index, num_articles)
 		newArticleContent = newArticleContent.."../.images/"..imageFilename
 		prevIndexEnd = indexEnd
@@ -461,18 +467,15 @@ end
 
 function Wallabag:downloadFile(url, index, num_articles)
     local imageFilename = md5.sum(url)
-    print("start filename: "..imageFilename)
     for key, filename in pairs(walla_image_cache) do
         if filename:match(imageFilename) then
             table.insert(walla_image_matched, filename)
             table.remove(walla_image_cache, key)
-            print("matched "..filename)
             return filename
         end
     end
     for key, filename in pairs(walla_image_matched) do
         if filename:match(imageFilename) then
-            print("matched "..filename)
             return filename
         end
     end
@@ -488,7 +491,6 @@ function Wallabag:downloadFile(url, index, num_articles)
             elseif header["content-type"]:match("image/(.*)$") then
                 imageExt = header["content-type"]:match("image/(.*)$")
             else
-                print(header["content-type"])
                 imageExt = "unknown"
             end
         else
