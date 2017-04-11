@@ -314,7 +314,7 @@ function Wallabag:buildLocalDB(remoteDB)
             remote_status["status"] = "reading"
             article_filename = walla_dir..article_id.."-"..article_title..".html"
         end
-		-- print("filename: "..article_filename)
+		print("filename: "..article_filename)
 
 		article_content = Wallabag:downloadImages(article_content, article_id, index, num_articles)
 
@@ -450,6 +450,7 @@ function Wallabag:downloadImages(articleContent, articleId, index, num_articles)
 		counter = counter + 1
 		imageLink = articleContent:sub(indexStart, indexEnd-1)
 		newArticleContent = newArticleContent..articleContent:sub(prevIndexEnd, indexStart-1)
+        print("imagelink: "..imageLink.." "..articleId)
         imageFilename = Wallabag:downloadFile(imageLink, index, num_articles)
 		newArticleContent = newArticleContent.."../.images/"..imageFilename
 		prevIndexEnd = indexEnd
@@ -459,8 +460,8 @@ function Wallabag:downloadImages(articleContent, articleId, index, num_articles)
 end
 
 function Wallabag:downloadFile(url, index, num_articles)
-    -- print("url: "..url)
     local imageFilename = md5.sum(url)
+    print("start filename: "..imageFilename)
     for key, filename in pairs(walla_image_cache) do
         if filename:match(imageFilename) then
             table.insert(walla_image_matched, filename)
@@ -490,24 +491,26 @@ function Wallabag:downloadFile(url, index, num_articles)
                 print(header["content-type"])
                 imageExt = "unknown"
             end
-
-            imageFilename = imageFilename.."."..imageExt
-
-            if syncInfoMsg then
-                UIManager:close(syncInfoMsg)
-                syncInfoMsg = nil
-            end
-            local dlInfoMsg = InfoMessage:new{text = _("Downloading images:\n Article "..index.." of "..num_articles..".")}
-            UIManager:show(dlInfoMsg)
-            UIManager:forceRePaint()
-            UIManager:close(dlInfoMsg)
-
-            local imageFile = io.open(walla_image_dir..imageFilename, "w")
-            imageFile:write(content)
-            imageFile:close()
-            table.insert(walla_image_matched, imageFilename)
-            return imageFilename
+        else
+            imageExt = "unknown"
         end
+
+        imageFilename = imageFilename.."."..imageExt
+
+        if syncInfoMsg then
+            UIManager:close(syncInfoMsg)
+            syncInfoMsg = nil
+        end
+        local dlInfoMsg = InfoMessage:new{text = _("Downloading images:\n Article "..index.." of "..num_articles..".")}
+        UIManager:show(dlInfoMsg)
+        UIManager:forceRePaint()
+        UIManager:close(dlInfoMsg)
+
+        local imageFile = io.open(walla_image_dir..imageFilename, "w")
+        imageFile:write(content)
+        imageFile:close()
+        table.insert(walla_image_matched, imageFilename)
+        return imageFilename
     else
         os.execute("cp -v "..DataStorage:getDataDir().."/plugins/wallabag.koplugin/".."blank.jpg "..walla_image_dir..imageFilename..".jpg")
         return imageFilename..".jpg"
