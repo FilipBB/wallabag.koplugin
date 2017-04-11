@@ -298,7 +298,7 @@ function Wallabag:buildLocalDB(remoteDB)
 
         local article_url = remote_article.url
         local article_id = remote_article.id
-        local article_file_id = string.format(padding_format, remote_article.id)
+        local article_file_id = string.format(padding_format, article_id)
         local article_content = remote_article.content
         local article_title = remote_article.title
 
