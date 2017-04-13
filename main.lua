@@ -61,8 +61,8 @@ function Wallabag:createDBDir()
     lfs.mkdir(walla_dir.."favorites")
 end
 
-function Wallabag:addToMainMenu(tab_item_table)
-    table.insert(tab_item_table.plugins, {
+function Wallabag:addToMainMenu(menu_items)
+    menu_items.wallabag = {
         text = _("Wallabag"),
         sub_item_table = {
             {
@@ -92,7 +92,7 @@ function Wallabag:addToMainMenu(tab_item_table)
 				end,
 			},
         },
-    })
+    }
 end
 
 function Wallabag:updateSettings()
@@ -431,7 +431,7 @@ function Wallabag:sync()
             end
         end
     end
-    os.execute('rm -rd "'..walla_dir..'"')
+    os.execute('rm -rf "'..walla_dir..'"')
 
     local remoteDB = Wallabag:getDB("remote")
     Wallabag:createDBDir()
